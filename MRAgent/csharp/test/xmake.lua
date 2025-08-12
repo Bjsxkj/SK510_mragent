@@ -1,0 +1,5 @@
+target('mragent_cs_test')
+    set_kind('binary')
+    add_rules('csharp')
+    add_files('testcs_1.cs')
+    add_files('../swig/*.cs')
