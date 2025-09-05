@@ -1,0 +1,32 @@
+﻿---
+#Language: Cpp
+BasedOnStyle: Microsoft
+IndentWidth: 4
+ColumnLimit: 120
+
+# 命名空间缩进优化
+NamespaceIndentation: All  
+
+# 括号风格配置
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterClass:      true
+  AfterControlStatement: Always
+  AfterEnum:       true
+  AfterExternBlock: true
+  AfterFunction:   true
+  AfterNamespace:  true  # 关键配置
+  AfterStruct:     true
+  AfterUnion:      false
+
+# 缩进策略强化
+IndentAccessModifiers: true
+IndentCaseLabels: true
+IndentGotoLabels: true
+
+# 预处理指令缩进
+IndentPPDirectives: AfterHash
+
+# 启用自动换行缩进
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortLambdasOnASingleLine: All

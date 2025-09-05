@@ -1,0 +1,23 @@
+// // 创建一个 Properties 对象
+// def localproperties = new Properties()
+// // 加载 properties 文件
+// localproperties.load(new FileInputStream(file('local.properties')))
+
+// def imiSdk_dir = localproperties.getProperty('imiSdk_dir')
+// println "imiSdk_dir: $imiSdk_dir"
+
+
+// if (hasProperty('imiSdk_dir') && imiSdk_dir != '') {
+//     apply from: '${imiSdk_dir}/wrappers/java_lang/android/settings.gradle'
+//     include ':app'
+//     include ':IMI_SDK'
+//     project(':IMI_SDK').projectDir = new File('${imiSdk_dir}/wrappers/java_lang/android/app')
+// } else{
+//     apply from: 'D:/WORK/imimrsdk/wrappers/java_lang/android/settings.gradle'
+//     include ':app'
+//     include ':IMI_SDK'
+//     project(':IMI_SDK').projectDir = new File('D:/WORK/imimrsdk/wrappers/java_lang/android/app')
+// }
+
+include ":app"
+

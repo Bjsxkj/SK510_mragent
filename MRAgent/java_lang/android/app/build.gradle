@@ -1,0 +1,219 @@
+if (rootProject.hasProperty("useGlobal") && "$useGlobal"=="true") {
+    println("Use global settings: ${globalValues}")
+}else {
+    ext.kotlin_version = '1.4.10'
+    ext.globalValues = [
+        TargetSdkVer:   30,
+        CompileSdkVer:  30,
+        BuildToolsVer:  '30.0.2'
+    ]
+}
+
+//定义时间
+def releaseTime() {
+    return new Date().format("yyyyMMdd_HHmmss", TimeZone.getTimeZone("GMT+08:00"))
+}
+
+def getGitCommitId() {
+    return "git rev-parse --short HEAD".execute().text.trim()
+}
+
+def get_version_info() {
+    return "MRAgent_V${project.android.defaultConfig.versionName}_T${releaseTime()}_C_${getGitCommitId()}"
+}
+
+apply plugin: "com.android.library"
+apply plugin: 'kotlin-android'
+apply plugin: 'org.tboox.gradle-xmake-plugin'
+
+//
+android {
+    compileSdkVersion globalValues.CompileSdkVer
+    buildToolsVersion globalValues.BuildToolsVer
+    defaultConfig {
+        minSdkVersion 21
+        targetSdkVersion globalValues.TargetSdkVer
+        versionCode 1
+        versionName "1.0.0"
+        // 支持的CPU配置
+        ndk {
+            abiFilters 'arm64-v8a'
+        }
+        testInstrumentationRunner  "androidx.test.runner.AndroidJUnitRunner"
+
+        externalNativeBuild {
+            xmake {
+                // append the global cflags (optional)
+                // cFlags "-DTEST"
+
+                // // append the global cppflags (optional)
+                // cppFlags "-DTEST", "-DTEST2"
+
+                // switch the build mode to `debug` for `xmake f -m debug` (optional)
+                buildMode "release"
+
+                // set abi filters (optional), e.g. armeabi, armeabi-v7a, arm64-v8a, x86, x86_64
+                // we can also get abiFilters from defaultConfig.ndk.abiFilters
+                abiFilters "arm64-v8a"  //"armeabi-v7a", 
+            }
+        }
+
+    }
+
+    externalNativeBuild {
+        xmake {
+            path "../../../../xmake.lua"  //使用xmake编译JNI
+            // enable verbose output (optional), e.g. verbose, warning, normal
+            logLevel "verbose"
+            // set c++stl (optional), e.g. c++_static/c++_shared, gnustl_static/gnustl_shared, stlport_static/stlport_shared
+            stl "c++_static"
+
+            arguments '-P', '.'
+
+            targets  'mragent_all'
+
+            // set the given xmake program path (optional)
+            // program /usr/local/bin/xmake
+
+            // disable stdc++ library (optional)
+            // stdcxx false
+
+            // set the given ndk directory path (optional)
+            // ndk "/Users/ruki/files/android-ndk-r20b/"
+
+            // set sdk version of ndk (optional)
+            // sdkver 21
+        }
+    }
+
+
+    buildTypes {
+        release {
+            buildConfigField 'String', 'VERSION_INFO', "\"" + get_version_info() + "_release\""
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            buildConfigField 'String', 'VERSION_INFO', "\"" + get_version_info() + "_debug\""
+            jniDebuggable true
+            ndk {
+                // 保留所有的调试符号信息
+                debugSymbolLevel 'FULL'
+            }
+            packagingOptions{
+                doNotStrip "**.so"
+            }
+        }
+    }
+
+    
+
+    sourceSets {
+//        androidTest {
+//            manifest.srcFile "src/androidTest/AndroidManifest.xml"
+//            java.srcDirs "src/androidTest/java", "../../test/java"
+//        }
+        main {
+            java.srcDirs "${projectDir}/../../swig/java"
+            // jniLibs.srcDirs "${projectDir}/../../../out/android"
+            assets {
+                srcDirs "${projectDir}/../../../out/cs_dlls" // 原始 assets 目录
+                include '**/**/*.dll' // 只包含 assets 目录下所有扩展名为 .png 的文件
+                exclude '**/**/*.so' // 排除 assets 目录下所有名为 temp 的子目录及其内容
+            }
+        }
+    }
+
+    lintOptions {
+        abortOnError false
+    }
+
+    // repositories{
+    //     flatDir{
+    //         dirs 'libs'
+    //     }
+    // }
+
+    compileOptions {
+        sourceCompatibility 1.8
+        targetCompatibility 1.8
+    }
+
+    //配置自定义打包名称
+    libraryVariants.all { variant ->
+        variant.outputs.all { output ->
+            def outputFile = output.outputFile
+            if (outputFile != null && outputFile.name.endsWith('.aar')) {
+                if (variant.buildType.name.equals('release')) {
+                    outputFileName = "MRAgent_V${defaultConfig.versionName}_T${releaseTime()}_C_${getGitCommitId()}_release.aar"
+                } else if (variant.buildType.name.equals('debug')) {
+                    outputFileName = "MRAgent_V${defaultConfig.versionName}_T${releaseTime()}_C_${getGitCommitId()}_debug.aar"
+                }
+            }
+        }
+    }
+
+    packagingOptions {
+        
+    }
+}
+
+
+def getSdkDir() {
+    Properties properties = new Properties()
+    File localPropertiesFile = rootProject.file('local.properties')
+    if (localPropertiesFile.exists()) {
+        properties.load(localPropertiesFile.newDataInputStream())
+        return properties.getProperty('sdk.dir')
+    } else {
+        throw new FileNotFoundException("local.properties file not found")
+    }
+}
+
+// task runXMakeOnRlease(type: Exec) {
+//     doFirst {
+//         println "SDK Directory: $sdkDir"
+//         def Ndk = "$sdkDir/ndk/21.1.6352462"
+//         exec {
+//             workingDir '${projectDir}/../../../../../' // 设置XMake脚本的目录
+//             commandLine 'xmake', 'global', "--ndk=$Ndk"
+//         }
+//         exec {
+//             workingDir '${projectDir}/../../../../../' // 设置XMake脚本的目录
+//             commandLine 'xmake', 'f', '-c', '-p', 'android', '-a', 'arm64-v8a', '--update_mragent_wrapped_code=no'
+//         }
+//     }
+//     workingDir '${projectDir}/../../../../../' // 设置XMake脚本的目录
+//     commandLine 'xmake', 'build', 'mragent_all' // 运行xmake命令
+// }
+
+// task runXMakeOnDebug(type: Exec) {
+//     doFirst {
+//         println "SDK Directory: $sdkDir"
+//         def Ndk = "$sdkDir/ndk/21.1.6352462"
+//         exec {
+//             workingDir '${projectDir}/../../../../../' // 设置XMake脚本的目录
+//             commandLine 'xmake', 'global', "--ndk=$Ndk"
+//         }
+//         exec {
+//             workingDir '${projectDir}/../../../../../' // 设置XMake脚本的目录
+//             commandLine 'xmake', 'f', '-c', '-m', 'debug', '-p', 'android', '-a', 'arm64-v8a', '--update_mragent_wrapped_code=no'
+//         }
+//     }
+//     workingDir '${projectDir}/../../../../../' // 设置XMake脚本的目录
+//     commandLine 'xmake', 'build', 'mragent_all' // 运行xmake命令
+// }
+
+task deleteSpecificFiles(type: Delete) {
+    delete fileTree(dir: 'build', includes: ['**/*.aar', '**/*.apk'])
+}
+
+this.gradle.projectsEvaluated {
+    //println "projectsEvaluated..."
+    def preBuild = project.tasks.findByName('preBuild')
+    def preBuildOnRelease = project.tasks.findByName('preReleaseBuild')
+    def preBuildOnDebug = project.tasks.findByName('preDebugBuild')
+    preBuild.dependsOn deleteSpecificFiles
+    // preBuildOnRelease.dependsOn runXMakeOnRlease
+    // preBuildOnDebug.dependsOn runXMakeOnDebug
+}

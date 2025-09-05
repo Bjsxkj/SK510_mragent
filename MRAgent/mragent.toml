@@ -1,0 +1,8 @@
+[server]
+address = '192.168.31.38'
+signaling_port = 5556
+
+[data_ports]
+color = 5557
+usertrack = 5558
+action = 5559

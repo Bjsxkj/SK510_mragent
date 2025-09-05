@@ -1,0 +1,182 @@
+核心模块说明  （api使用另用一个文件作为api说明）
+
+### 1 主要类与文件
+
+#### MessageCore 端
+- **[`MessageCore`](MessageCore/cpp/include/MessageCoreApi.h)** 
+  - 核心类，管理数据分发和共享内存
+  - 提供 initialize/start/stop/release 等生命周期管理
+  - 处理 Color/UserTrack/Skeleton 等数据发布
+  - 管理 cmd 通信 socket
+  - 接收 MrAgent 发送过来的 cmd
+  - 将请求转发给MrManager处理
+  - 将对应的属性值发送给MrAgent
+  - 通过接收客户端color sensor 发送过来的 color ack , 判断是否需要通知MrManager关闭释放color sensor
+
+- **[`SharedMemoryPool`](MessageCore/cpp/common/ShareMemory.cpp)**
+  - 共享内存池管理
+  - 支持多路数据高效传输
+  - 封装 fd 传递和 mmap 操作
+
+- **[`MessageCoreApi`](MessageCore/cpp/src/MessageCoreApi.cpp)**
+  - MessageCore::initialize 资源初始化
+    - 建立socket
+    - 建立zmq
+    - 建立共享内存
+
+  - MessageCore::release 释放资源
+    - 释放socket
+    - 释放zmq
+    - 释放共享内存
+
+  - MessageCore::isStarted 判断是否启动，返回 true：启动成功，返回 false：启动失败
+
+  - MessageCore::start 启动MessageCore，开启后台线程
+
+  - MessageCore::join 等待后台线程结束
+
+  - MessageCore::stop 停止MessageCore
+
+  - int MessageCore::publishColorFrame(unsigned char *array_ref, int array_len, int w, int h, int frameNum)
+    根据配置文件使用zmq或共享内存传输Color
+    -- unsigned char *array_ref：Color数据
+    -- int array_len：Color数据大小
+    -- int w：Color宽度
+    -- int h：Color高度
+    -- int frameNum：Color帧号
+    -- 返回值：0：发送成功，非0：发送失败
+
+  - int MessageCore::publishForegroundData(unsigned char *array_ref, int array_len, int w, int h, int frameNum)
+    根据配置文件使用zmq或共享内存传输Foreground
+    -- unsigned char *array_ref：Foreground数据
+    -- int array_len：Foreground数据大小
+    -- int w：Foreground宽度
+    -- int h：Foreground高度
+    -- int frameNum：Foreground帧号
+    -- 返回值：0：发送成功，非0：发送失败
+
+  - int MessageCore::publishBodySkeletonData(const imimr::ImiBodySkeleton& skeletons, int frameNum)
+    根据配置文件使用zmq或共享内存传输BodySkeleton
+    -- const imimr::ImiBodySkeleton& skeletons：BodySkeleton数据
+    -- int frameNum：BodySkeleton帧号
+    -- 返回值：0：发送成功，非0：发送失败
+
+   - void MessageCore::bindCmdSocket()
+    绑定 cmd server socket
+
+  - void MessageCore::recvLoop()
+    循环接收 MrAgent 发来的消息
+
+  - void MessageCore::parseCmd(identity,request)
+   -- const string identity：客户端身份标识
+    -- zmq::message_t request: 接收到的消息
+    解析处理消息
+  
+
+#### MRAgent 端
+- **[`IImiBaseDevice`](MRAgent/cpp/src/ImiMrAgent.cpp)**
+  - 初始化 cmd socket
+  - 发送 cmd 消息
+  - 接收 MessageCore 传过来的MrManager 状态
+
+- **[`ImiMrCmd`](MRAgent/cpp/include/ImiMrCmd.h)**
+  - 定义了 cmd 的结构体
+  - 定义了cmd type 的类型，支持以下类型：
+
+|   cmd type     | 功能       | 
+|-------------|-------------|
+| CMD_DEVICE_OPEN     | 打开device     |
+| CMD_DEVICE_CLOSE     | 关闭device     | 
+| CMD_COLOR_ACK     | color frame 确认     | 
+| CMD_HEARTBEAT     |  心跳     | 
+  
+
+- **[`IImiColorSensor`](MRAgent/cpp/include/ImiColorSensor.h)**
+  - Color像数据接收处理
+  - 支持共享内存/ZMQ 双模式
+
+- **[`IImiUserTrackSensor`](MRAgent/cpp/include/IImiUserTrackSensor.h)**
+  - 用户跟踪数据接收处理
+  - 包含骨骼和前景数据
+
+- **[`ImiMrAgent`](MRAgent/cpp/src/ImiMrAgent.cpp)**
+  - int IImiColorSensor::start(int mode)
+    开启ColorSensor，设置Color分辨率，根据配置文件连接zmq或共享内存
+    - in mode: 0：使用480P分辨率，1：使用1080P分辨率，2：使用2K分辨率
+    -- 返回值：0：成功，非0：失败
+
+  - int IImiColorSensor::stop()
+    停止ColorSensor，根据配置文件释放zmq或共享内存
+    -- 返回值：0：成功，非0：失败
+
+  - ImiBaseFrame IImiColorSensor::readFrame(int timeout)
+    读取Color，断连时会自动重连
+    - in timeout: 超时，当前不支持
+    -- 返回值：ImiBaseFrame，若读取成功ImiBaseFrame包含Color RGB数据，若读取失败则ImiBaseFrame包含大小为0的数据，根据ImiBaseFrame的帧号判断是否有重复
+
+  - int IImiUserTrackSensor::start(int startFlags)
+    开启UserTrackSensor，根据配置文件连接zmq或共享内存
+    - int startFlags: 当前不支持
+    -- 返回值：0：成功，非0：失败
+
+  - int IImiUserTrackSensor::stop()
+    停止UserTrackSensor，根据配置文件释放zmq或共享内存
+    -- 返回值：0：成功，非0：失败
+
+  - ImiBaseFrame IImiUserTrackSensor::readFrame(int timeout)
+    读取UserTrack，断连时会自动重连
+    - int timeout: 超时，当前不支持
+    -- 返回值：ImiBaseFrame，若读取成功ImiBaseFrame包含UserTrack数据，若读取失败则ImiBaseFrame包含大小为0的数据，根据ImiBaseFrame的帧号判断是否有重复
+
+  - void IImiBaseDevice::initCmdSocket()
+    初始化cmd client socket
+  
+  - void IImiBaseDevice::recvLoop()
+    循环接收处理 MessageCore 发送过来的消息
+
+  - void IImiBaseDevice::sendCmdMsg(cmd_data_native& cmd)
+    发送cmd 消息
+    - cmd_data_native cmd: cmd 消息结构体
+  
+  - int IImiBaseDevice::setProperty(int propId, IImiDeviceProperty* prop)
+    设置属性
+    - int propId: 业务id
+    - IImiDeviceProperty prop: 属性值
+    -- 返回值：0：成功，非0：失败
+
+  - int IImiBaseDevice::getProperty(int propId, IImiDeviceProperty* prop)
+    获取属性
+    - int propId: 业务id
+    - IImiDeviceProperty prop: 属性值
+    -- 返回值：0：成功，非0：失败
+
+### 2 典型数据流
+
+#### 共享内存模式
+1. MessageCore 初始化:
+```cpp
+ColorPool.create("COLOR");
+SkeletonPool.create("SKELETON");
+ForegroudPool.create("FOREGROUND");
+```
+
+2. MRAgent 连接:
+```cpp
+color_pool.attach("COLOR");
+skeleton_pool.attach("SKELETON");
+foreground_pool.attach("FOREGROUND");
+```
+
+3. 数据传输
+```cpp
+// MessageCore 写入
+ColorPool.writeImg(&header, sizeof(header), data, size, w, h);
+
+// MRAgent 读取
+color_pool.readImg(&header, data, size, w, h);
+```
+
+#### ZMQ 模式
+用于非本机进程间通信
+通过 TCP 协议传输数据
+支持发布/订阅模式
